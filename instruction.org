@@ -1,0 +1,54 @@
+* Synopsis
+**  IMU Project File Description
+*** "IMU_Unity_Server" Project
+- IMU_DUO3D.cs
+  DUO3D IMU Unity server script, used to receive the orientation data from DUO3D client
+- IMU_JY901BT.cs
+  JY901BT IMU Unity server script, used to receive the orientation data from JY901BT client
+*** "IMUJY901_python_client" Project
+It's the JY901BT IMU client, used to send Gyo data to IMU Unity server
+
+* IMU Related
+** Technical parameters  
+- 
+
+** [#B] Gyo Calibration
+*** Bias Error
+Bias error is nonzero output signal which appears in the sensor output when input is zero. The bias offset causes the sensor output to offset from the true data by a constant value. This error is not dependent on external forces applied to the sensor. Bias error can be divided into three categories, including a static part (or bias offset), a random part (or drift), and a temperature dependent part. The static bias and temperature bias can be compensated in the calibration process. Static bias can be measured by averaging the sensor output for a zero input signal. To compensate for this bias, it should be subtracted from the output data. The drift bias has a random nature and cannot be fixed in the calibration process. It should be treated as a stochastic error. 
+
+*** Calculate the Bias Offset
+Keep the DUO3D IMU in static stastus, and then track the Gyo data output to calculate the bias error.
+- pictures: ./pictures/GyoRawData.jpg
+- data: ./data/originalIMU.txt
+- Matlab scripts
+
+#+BEGIN_SRC matlab
+%The IMU data 
+originalFp=fopen('originalIMU.txt');
+%[Gyo,count]=fscanf(fd,'Gyro: %f , %f , %f')
+Gyo=fscanf(originalFp,'%f,%f,%f',[3 Inf]);
+Gyo=Gyo';
+fclose(originalFp);
+
+%plot
+plot(Gyo)
+%xlable('No. of samples'),ylable('Output')
+title('Original Gyo data')
+%axis([0,3000,-10,10]);
+#+END_SRC
+
+Avarage Value:
+[ -1.7996    1.6850    0.1413]
+
+This is the bias error of Gyroscope and this value need to be subtracted.
+*** Data fusion and filter
+Accelerometter + Gyro => MAdgwick => AHRS
+
+*** Results
+#+CAPTION: This is the wave form example
+#+NAME: fig:kalmanFilter
+[[./img/Gyo_ori_kalman_bias_compare.jpg
+]]
+
+* Reference
+- [[http://wiki.ros.org/duo3d-driver][duo3d-driver]]
