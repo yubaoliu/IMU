@@ -72,12 +72,12 @@ public class IMU_DUO3D : MonoBehaviour {
 		//if(!oldOri.Equals(iMUrotatation))
 		if (updataFlag) {
 			transform.localRotation = iMUrotatation;
+      print(iMUrotatation.eulerAngles.x.ToString() + "," + iMUrotatation.eulerAngles.y.ToString() + "," + iMUrotatation.eulerAngles.z.ToString());
       //transform.Rotate (iMUrotatation.eulerAngles);
       iMUrotatation = Quaternion.identity;
 			//	Quaternion tmp=new Quaternion();
 			//	tmp.eulerAngles = eulerAngle;
-			//	transform.rotation = tmp;
-			print (iMUrotatation.eulerAngles.x.ToString () +","+ iMUrotatation.eulerAngles.y.ToString () +","+ iMUrotatation.eulerAngles.z.ToString ());
+			//	transform.rotation = tmp;			
 			updataFlag = false;
 		}
 	}

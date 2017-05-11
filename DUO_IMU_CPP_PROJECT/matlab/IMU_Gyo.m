@@ -6,7 +6,7 @@ originalFp=fopen('originalIMU.txt');
 Gyo=fscanf(originalFp,'%f,%f,%f',[3 Inf]);
 Gyo=Gyo';
 fclose(originalFp);
-
+mean(Gyo)
 %calculate the IMU data after filter, here use Kalman filter
 
 filteredFp=fopen('kalmanfilterIMU.txt');
@@ -19,12 +19,13 @@ finalFp=fopen('finalIMU.txt');
 finalData=fscanf(finalFp,'%f,%f,%f',[3,Inf]);
 finalData=finalData';
 fclose(finalFp);
+std(finalData).^2
 
 %plot
 subplot(2,2,1);plot(Gyo)
 %xlable('No. of samples'),ylable('Output')
 title('Original Gyo data')
-%axis([0,3000,-10,10]);
+axis([0,3000,-5,5]);
 
 subplot(2,2,2); plot(state)
 %xlable('No. of samples');ylable('Outputs');
@@ -34,3 +35,4 @@ title('Kalman filter')
 subplot(2,2,3);plot(finalData)
 title('Final data')
 %axis([0,5000,-180,180]);
+
