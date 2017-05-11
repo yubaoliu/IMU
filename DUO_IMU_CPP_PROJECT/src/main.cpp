@@ -1,4 +1,5 @@
 #include "opencv2/video/tracking.hpp"
+#include "opencv2/highgui.hpp"
 #include "UdpBaseBehaviour.h"
 #include "Sample.h"
 #include <fstream>
@@ -8,12 +9,14 @@
 #include "MathEigen.h"
 #include "MathUtility.h"
 #include <cmath>
-Eigen::Quaternionf currentRotation= Eigen::Quaternionf::Identity();;
+#include <thread>
+Eigen::Quaternionf currentRotation= Eigen::Quaternionf::Identity();
 #define DUO_IMU_CALIBRATION
 #define M_PI 3.1415926
 void CALLBACK DUOCallback(const PDUOFrame pFrameData, void *pUserData);
 Eigen::Quaternionf Update(float dt, const Eigen::Vector3f * gyro, const Eigen::Vector3f * acc, const Eigen::Vector3f * mag, Eigen::Vector3f gyro_variance);
-Eigen::Vector3f removeGravity(Eigen::Vector3f accel, Eigen::Quaternionf q);
+//Eigen::Vector3f removeGravity(Eigen::Vector3f accel, Eigen::Quaternionf q);
+void parameterAdjustment();
 double deg2rad(double deg);
 #ifdef DUO_IMU_CALIBRATION
 std::fstream fs_IMU_original; //for Gyo
@@ -23,15 +26,12 @@ std::fstream fs_IMU_final; //for Gyo
 std::fstream fs_IMU_accelerator; //for accelerator
 
 Udp_base_behaviour *udpEnd = new Udp_base_behaviour();
-char buf[100] = {"Hello world"};
-float lastTime;
-//float mean[3] = { -1.9107f, 1.9139f, 0.1555f };
-//float mean[3] = {-0.0560f,0.0618f,0.0069f};
-//float mean[3] = {-1.9477f,1.9002f,0.1725f };
-//float mean[3] = { -1.8380f,1.8929f,0.1607f };
+char sendBuf[100] = {"Hello world"};
+char recvBuf[1024] = { '\0' };
+bool startRecvThread = false;
 float roll = 0.0f, pitch = 0.0f, yaw = 0.0f;
-bool skipFlag = true; //skip the converge stage
-int numOfFrames = 0;
+//bool skipFlag = true; //skip the converge stage
+//int numOfFrames = 0;
 
 //kalman filter parameter init
 const int stateNum = 3;
@@ -80,8 +80,9 @@ int main(int argc, char* argv[])
 	//UDP communication
 	udpEnd->Winsock_init();
 	udpEnd->InitRemoteSocket_Addr_Port("127.0.0.1", 8888);
-
+	udpEnd->InitLocalSocket_LocalAddr_Port("127.0.0.1", 8888);
 	printf("DUOLib Version:       v%s\n", GetDUOLibVersion());
+	std::thread th(parameterAdjustment);
 
 	DUOResolutionInfo ri;
 	// Select 320x240 resolution with 2x2 binning capturing at 30FPS
@@ -116,6 +117,8 @@ int main(int argc, char* argv[])
 				fs_IMU_original.close();
 				fs_IMU_final.close();
 				fs_IMU_accelerator.close();
+				//th.join();
+				th.detach();
 			}
 		}
 	}
@@ -148,48 +151,21 @@ void CALLBACK DUOCallback(const PDUOFrame pFrameData, void *pUserData)
 				float q3 = currentRotation.w();
 				char end = 'E';
 				//send to UNITY client
-				memset(buf, 0, sizeof(buf));
-				memcpy(buf, (char *)&q0, sizeof(float));
-				memcpy(buf + sizeof(float), (char *)&q1, sizeof(float));
-				memcpy(buf + sizeof(float) * 2, (char *)&q2, sizeof(float));
-				memcpy(buf + sizeof(float) * 3, (char *)&q3, sizeof(float));
-				memcpy(buf + sizeof(float) * 4, &end, sizeof(char));
-				udpEnd->SendUdpPacket(buf, sizeof(buf));
+				memset(sendBuf, 0, sizeof(sendBuf));
+				memcpy(sendBuf, (char *)&q0, sizeof(float));
+				memcpy(sendBuf + sizeof(float), (char *)&q1, sizeof(float));
+				memcpy(sendBuf + sizeof(float) * 2, (char *)&q2, sizeof(float));
+				memcpy(sendBuf + sizeof(float) * 3, (char *)&q3, sizeof(float));
+				memcpy(sendBuf + sizeof(float) * 4, &end, sizeof(char));
+				udpEnd->SendUdpPacket(sendBuf, sizeof(sendBuf));
 
 				roll = currentRotation.toRotationMatrix().eulerAngles(0,1,2).x();
 				pitch = currentRotation.toRotationMatrix().eulerAngles(0,1,2).y();
 				yaw = currentRotation.toRotationMatrix().eulerAngles(0,1,2).z();
 				fs_IMU_final << roll << "," << pitch << "," << yaw << std::endl;
 
-
+				startRecvThread = true;
 #if 0
-				printf(" Sample #%d\n", i + 1);
-				// Calibrate gyroscope offsets for 100 samples
-				if (_num_samples < 100)
-				{
-					if (_num_samples == 0)
-					{
-						_gyro_offset[0] = 0.f;
-						_gyro_offset[1] = 0.f;
-						_gyro_offset[2] = 0.f;
-					}
-
-					_gyro_offset[0] += pFrameData->IMUData[i].gyroData[0];
-					_gyro_offset[1] += pFrameData->IMUData[i].gyroData[1];
-					_gyro_offset[2] += pFrameData->IMUData[i].gyroData[2];
-				}
-				else if (_num_samples == 100)
-				{
-					_gyro_offset[0] /= 100.0f;
-					_gyro_offset[1] /= 100.0f;
-					_gyro_offset[2] /= 100.0f;
-					printf("Calculated gyroscope offets [%g, %g, %g]",
-						_gyro_offset[0],
-						_gyro_offset[1],
-						_gyro_offset[2]);
-				}
-				else
-				{
 
 						// Angular velocity should be in rad/sec
 					printf("  Accelerometer: [%8.5f, %8.5f, %8.5f]\n", pFrameData->IMUData[i].accelData[0],
@@ -317,6 +293,7 @@ Eigen::Quaternionf Update(float dt, const Eigen::Vector3f * gyro, const Eigen::V
 double deg2rad(double deg) {
 	return deg * M_PI / 180.0;
 }
+/*
 Eigen::Vector3f removeGravity(Eigen::Vector3f accel, Eigen::Quaternionf q)
 {
 	float g[3] = { 0.0f, 0.0f, 0.0f };
@@ -326,4 +303,25 @@ Eigen::Vector3f removeGravity(Eigen::Vector3f accel, Eigen::Quaternionf q)
 	g[2] = q.x() * q.x() - q.y() * q.y() - q.z() * q.z() + q.w() * q.w();
 	accel = Eigen::Vector3f(accel[0] - g[0], accel[1] - g[1], accel[2] - g[2]);
 	return accel;
+}
+*/
+void parameterAdjustment()
+{
+	while (1)
+	{
+		if (startRecvThread)
+		{
+			char endLable;
+			udpEnd->ReceivePacket(recvBuf, sizeof(recvBuf));
+			memcpy(&(_gyro_offset.x()), recvBuf, sizeof(float));
+			memcpy(&(_gyro_offset.y()), recvBuf + 1 * sizeof(float), sizeof(float));
+			memcpy(&(_gyro_offset.z()), recvBuf + 2 * sizeof(float), sizeof(float));
+			memcpy(&(_gyro_varience.x()), recvBuf + 3 * sizeof(float), sizeof(float));
+			memcpy(&(_gyro_varience.y()), recvBuf + 4 * sizeof(float), sizeof(float));
+			memcpy(&(_gyro_varience.z()), recvBuf + 5 * sizeof(float), sizeof(float));
+			memcpy(&endLable, recvBuf + 6 * sizeof(float), sizeof(char));
+			//assert(endLable == 'E');
+			memset(recvBuf, 0, sizeof(recvBuf));
+		}
+	}
 }

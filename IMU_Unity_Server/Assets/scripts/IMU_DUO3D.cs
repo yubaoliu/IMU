@@ -7,37 +7,44 @@ using System.Net.Sockets;
 using System.Net;
 using System.Threading;
 public class IMU_DUO3D : MonoBehaviour {
-	Thread receiveThread;
+  public Vector3 _gyro_offset = new Vector3(-1.8966f, 1.9159f, 0.1865f);
+  public Vector3 _gyro_varience = new Vector3(0.0351f, 0.0149f, 0.0000001f);
+
+  byte[] recBuf = new byte[100];
+  byte[] sendBuf = new byte[1024];
+
+  Quaternion iMUrotatation;
+  bool updataFlag = false;
+
+  Thread receiveThread;
+  Thread sendThread;
+
 	Socket socket;
-	//UdpClient client;
+	
 	EndPoint remoteEP;
 	EndPoint localEp;
-	byte[] recBuf = new byte[100];
-  Quaternion iMUrotatation;
-	//Vector3 eulerAngle;
-	bool updataFlag=false;
-//	Stopwatch stopwatch = new Stopwatch();
-	// Use this for initialization
+
+  bool exitSignal = false;
 	void Start () {
-		UnityEngine.Debug.Log ("IMU Behaviour starting");
-
-
 		socket = new Socket (AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-		//client = new UdpClient ();
 		remoteEP = new IPEndPoint (IPAddress.Any, 0);
 		localEp = new IPEndPoint (IPAddress.Parse ("127.0.0.1"), 8888);
-		//client.Client.Bind (localEp);
 		socket.Bind(localEp);
 
 		receiveThread = new Thread (new ThreadStart (UDPReceiveData));
 		receiveThread.IsBackground = true;
 		receiveThread.Start ();
+
+    sendThread = new Thread(new ThreadStart(UDPSendData));
+    sendThread.IsBackground = true;
+    sendThread.Start();
+
 		Debug.Log ("inited");
 		
 	}
 	private void UDPReceiveData()
 	{
-		while (true) {
+		while (!exitSignal) {
       int dataSize = socket.ReceiveFrom (recBuf, ref remoteEP);
 			updataFlag = true;
       float q0 = BitConverter.ToSingle(recBuf, 0);
@@ -45,46 +52,45 @@ public class IMU_DUO3D : MonoBehaviour {
       float q2 = BitConverter.ToSingle(recBuf, sizeof(float) * 2);
       float q3 = BitConverter.ToSingle(recBuf, sizeof(float) * 3);
       char end = BitConverter.ToChar(recBuf, sizeof(float) * 4);
-      Debug.Assert((end=='E'),"End of package");
+     // Debug.Assert((end=='E'),"End of package");
       iMUrotatation = new Quaternion(q0, q1, q2, q3);
-	//		Debug.Log ("Received data");
-  /*
-			float euX = BitConverter.ToSingle (recBuf, 0);
-			float euY = BitConverter.ToSingle (recBuf, sizeof(float));
-			float euZ=BitConverter.ToSingle(recBuf,sizeof(float)*2);
-
-      iMUrotatation = Quaternion.Euler(euX, euY, euZ);
-  		print("X:"+euX.ToString ()+" Y:"+euY.ToString()+" Z:"+euZ.ToString()+'\n');
-      */
 		}
+    Debug.Log("UDPReceiveData thread eixt");
 	}
-/*	private void SocketSend(string sendStr)  
-	{  
-	//	string editString="hello wolrd";  
-		byte[] sendData=new byte[1024];  
-		sendData=Encoding.ASCII.GetBytes(sendStr);  
-	//	socket.SendTo(sendData,sendData.Length,SocketFlags.None,ipEnd);  
+	private void UDPSendData()  
+	{   
+    while(!exitSignal)
+    {
+      if(updataFlag)//obtained the remote address
+      {
+        Buffer.BlockCopy(BitConverter.GetBytes(_gyro_offset.x), 0, sendBuf, 0 * sizeof(float), sizeof(float));
+        Buffer.BlockCopy(BitConverter.GetBytes(_gyro_offset.y), 0, sendBuf, 1 * sizeof(float), sizeof(float));
+        Buffer.BlockCopy(BitConverter.GetBytes(_gyro_offset.z), 0, sendBuf, 2 * (sizeof(float)), sizeof(float));
+        Buffer.BlockCopy(BitConverter.GetBytes(_gyro_varience.x), 0, sendBuf, 3 * sizeof(float), sizeof(float));
+        Buffer.BlockCopy(BitConverter.GetBytes(_gyro_varience.y), 0, sendBuf, 4 * sizeof(float), sizeof(float));
+        Buffer.BlockCopy(BitConverter.GetBytes(_gyro_varience.z), 0, sendBuf, 5 * sizeof(float), sizeof(float));
+        Buffer.BlockCopy(BitConverter.GetBytes('E'), 0, sendBuf, 6 * sizeof(float), sizeof(char));
+        socket.SendTo(sendBuf, sendBuf.Length, SocketFlags.None, remoteEP);
+      }
+    }
+    Debug.Log("UDPSendData thread exit");
 	}
-	*/
+
 	// Update is called once per frame
 	void Update () {
-		//Quaternion oldOri = transform.localRotation;
-		//if(!oldOri.Equals(iMUrotatation))
 		if (updataFlag) {
 			transform.localRotation = iMUrotatation;
       print(iMUrotatation.eulerAngles.x.ToString() + "," + iMUrotatation.eulerAngles.y.ToString() + "," + iMUrotatation.eulerAngles.z.ToString());
-      //transform.Rotate (iMUrotatation.eulerAngles);
-      iMUrotatation = Quaternion.identity;
-			//	Quaternion tmp=new Quaternion();
-			//	tmp.eulerAngles = eulerAngle;
-			//	transform.rotation = tmp;			
+      iMUrotatation = Quaternion.identity;	
 			updataFlag = false;
 		}
 	}
 	void OnDestroy(){
 		print ("OnDestroy is called");
 		socket.Close ();
-		//client.Close ();
-		receiveThread.Abort ();
+    exitSignal = true;
+    //client.Close ();
+    receiveThread.Abort ();
+    sendThread.Abort();
 	}
 }
