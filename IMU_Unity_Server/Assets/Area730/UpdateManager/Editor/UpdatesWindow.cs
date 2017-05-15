@@ -7,7 +7,7 @@ using System;
 
 namespace Area730.UpdatesManager
 {
-    [InitializeOnLoad]
+  //  [InitializeOnLoad]
     public static class UpdatePlugins
     {
         private static readonly string pluginDescriptorFilename = "pluginInfo.json";
