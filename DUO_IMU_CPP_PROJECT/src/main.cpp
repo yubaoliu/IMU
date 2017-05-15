@@ -1,4 +1,4 @@
-#include "opencv2/video/tracking.hpp"
+﻿#include "opencv2/video/tracking.hpp"
 #include "opencv2/highgui.hpp"
 #include "UdpBaseBehaviour.h"
 #include "Sample.h"
@@ -10,6 +10,11 @@
 #include "MathUtility.h"
 #include <cmath>
 #include <thread>
+
+#define WIDTH	640 
+#define HEIGHT 480
+#define FPS	30
+
 Eigen::Quaternionf currentRotation= Eigen::Quaternionf::Identity();
 #define DUO_IMU_CALIBRATION
 #define M_PI 3.1415926
@@ -30,8 +35,6 @@ char sendBuf[100] = {"Hello world"};
 char recvBuf[1024] = { '\0' };
 bool startRecvThread = false;
 float roll = 0.0f, pitch = 0.0f, yaw = 0.0f;
-//bool skipFlag = true; //skip the converge stage
-//int numOfFrames = 0;
 
 //kalman filter parameter init
 const int stateNum = 3;
@@ -41,8 +44,6 @@ cv::Mat state(stateNum, 1, CV_32FC1);
 cv::Mat processNoise(stateNum, 1, CV_32F);
 cv::Mat measureMent = cv::Mat::zeros(measureNum, 1, CV_32F);
 
-// Gyroscope offset calibration
-int _num_samples;
 
 //Eigen::Vector3f _gyro_offset = Eigen::Vector3f(-1.9175f, 1.9869f, 0.1148f);//work well
 Eigen::Vector3f _gyro_offset = Eigen::Vector3f(-1.8966f, 1.9159f, 0.1865f);
@@ -61,6 +62,7 @@ struct IMU_STRUCT {
 //	float linear_acceleration_covariance;
 }imu_msg;
 
+cv::Mat leftData;
 
 int main(int argc, char* argv[])
 {	
@@ -70,13 +72,14 @@ int main(int argc, char* argv[])
 	fs_IMU_final.open("../matlab/finalIMU.txt", std::fstream::out);
 	fs_IMU_accelerator.open("../matlab/accelerator.txt", std::fstream::out);
 
+#ifdef KALMAN_FILTER
 	//kalman fileter
 	KF.transitionMatrix = cv::Mat::eye(3, 3, CV_32F);
 	cv::setIdentity(KF.measurementMatrix);
 	cv::setIdentity(KF.processNoiseCov,cv::Scalar::all(1e-5));
 	cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-1));
 	cv::setIdentity(KF.errorCovPost, cv::Scalar(1));
-
+#endif
 	//UDP communication
 	udpEnd->Winsock_init();
 	udpEnd->InitRemoteSocket_Addr_Port("127.0.0.1", 8888);
@@ -84,50 +87,92 @@ int main(int argc, char* argv[])
 	printf("DUOLib Version:       v%s\n", GetDUOLibVersion());
 	std::thread th(parameterAdjustment);
 
-	DUOResolutionInfo ri;
-	// Select 320x240 resolution with 2x2 binning capturing at 30FPS
-	if (EnumerateDUOResolutions(&ri, 1, 320, 240, DUO_BIN_HORIZONTAL2 + DUO_BIN_VERTICAL2, 30))
+	if (!OpenDUOCamera(WIDTH, HEIGHT, FPS))
 	{
-		DUOInstance duo;
-		// Open DUO
-		if (OpenDUO(&duo))
-		{
-			// Sets sampling rate
-			SetDUOIMURate(duo, 500); //very important, the deltaTime parameters filter method need to be calculated according to it
+		printf("Could not open DUO camera\n");
+		return 0;
+	}
 
-			char tmp[260];
-			// Get some DUO parameter values
-			GetDUODeviceName(duo, tmp);
-			printf("DUO Device Name:      '%s'\n", tmp);
-			printf("\nHit any key to start capturing");
-			_getch();
-			// Set selected resolution
-			SetDUOResolutionInfo(duo, ri);
-			// Start capture and pass DUOCallback function that will be called on every frame captured
-			if (StartDUO(duo, DUOCallback, NULL))
+	cv::namedWindow("Left");
+	cv::namedWindow("Right");
+
+	SetExposure(80);
+	SetLed(50);
+	// Sets sampling rate
+	SetIMURate(500); //very important, the deltaTime parameters filter method need to be calculated according to it
+
+	// Create image headers for left & right frames     
+	cv::Mat left(cv::Size(WIDTH, HEIGHT), CV_8UC1);
+	cv::Mat right(cv::Size(WIDTH, HEIGHT), CV_8UC1);
+
+	while ((cv::waitKey(1) & 0xff) != 27)
+	{
+		PDUOFrame pFrameData = GetDUOFrame();
+		if (pFrameData == NULL) continue;
+		if (pFrameData->IMUPresent)
+		{
+			for (int i = 0; i < pFrameData->IMUSamples; i++)
 			{
-				// Wait for any key
-				_getch();
-				// Stop capture
-				StopDUO(duo);
-				// Close DUO
-				CloseDUO(duo);
-				/*release file handler*/
-				fs_IMU_kalmanfilter.close();
-				fs_IMU_original.close();
-				fs_IMU_final.close();
-				fs_IMU_accelerator.close();
-				//th.join();
-				th.detach();
+				fs_IMU_original << pFrameData->IMUData[i].gyroData[0] << "," << pFrameData->IMUData[i].gyroData[1] << "," << pFrameData->IMUData[i].gyroData[2] << std::endl;
+				imu_msg.linear_acceleration[0] = pFrameData->IMUData[i].accelData[0] * 9.80151f;
+				imu_msg.linear_acceleration[1] = pFrameData->IMUData[i].accelData[1] * 9.80151f;
+				imu_msg.linear_acceleration[2] = pFrameData->IMUData[i].accelData[2] * 9.80151f;
+
+				imu_msg.angular_velocity[0] = deg2rad(pFrameData->IMUData[i].gyroData[0] - _gyro_offset.x());
+				imu_msg.angular_velocity[1] = deg2rad(pFrameData->IMUData[i].gyroData[1] - _gyro_offset.y());
+				imu_msg.angular_velocity[2] = deg2rad(pFrameData->IMUData[i].gyroData[2] - _gyro_offset.z());
+
+				currentRotation = Update((2.0f / 1000.0f), &imu_msg.angular_velocity, &imu_msg.linear_acceleration, &imu_msg.magn, _gyro_varience);
+
+				float q0 = currentRotation.x();
+				float q1 = currentRotation.y();
+				float q2 = currentRotation.z();
+				float q3 = currentRotation.w();
+				char end = 'E';
+				//send to UNITY client
+				memset(sendBuf, 0, sizeof(sendBuf));
+				memcpy(sendBuf, (char *)&q0, sizeof(float));
+				memcpy(sendBuf + sizeof(float), (char *)&q1, sizeof(float));
+				memcpy(sendBuf + sizeof(float) * 2, (char *)&q2, sizeof(float));
+				memcpy(sendBuf + sizeof(float) * 3, (char *)&q3, sizeof(float));
+				memcpy(sendBuf + sizeof(float) * 4, &end, sizeof(char));
+				udpEnd->SendUdpPacket(sendBuf, sizeof(sendBuf));
+
+				roll = currentRotation.toRotationMatrix().eulerAngles(0, 1, 2).x();
+				pitch = currentRotation.toRotationMatrix().eulerAngles(0, 1, 2).y();
+				yaw = currentRotation.toRotationMatrix().eulerAngles(0, 1, 2).z();
+				fs_IMU_final << roll << "," << pitch << "," << yaw << std::endl;
+
+				startRecvThread = true;
 			}
 		}
+
+		left.data = (uchar*)pFrameData->leftData;
+		right.data = (uchar*)pFrameData->rightData;
+
+		cv::imshow("Left", left);
+		cv::imshow("Right", right);
+
+		cv::imwrite("D:\\home\\GIT_PROJECT\\IMU\\IMU_Unity_Server\\Assets\\Asset\\Resources\\scene.jpg", left);
+		
 	}
+
+	//clean
+	fs_IMU_kalmanfilter.close();
+	fs_IMU_original.close();
+	fs_IMU_final.close();
+	fs_IMU_accelerator.close();
+	
+	th.join();
+	th.detach();
+
+	CloseDUOCamera();
 	return 0;
 }
+#if 0
 void CALLBACK DUOCallback(const PDUOFrame pFrameData, void *pUserData)
 {
 		printf("DUO Frame Timestamp: %10.1f ms\n", pFrameData->timeStamp / 10.0f);
-
 		if (pFrameData->IMUPresent)
 		{
 			for (int i = 0; i < pFrameData->IMUSamples; i++)
@@ -165,6 +210,8 @@ void CALLBACK DUOCallback(const PDUOFrame pFrameData, void *pUserData)
 				fs_IMU_final << roll << "," << pitch << "," << yaw << std::endl;
 
 				startRecvThread = true;
+#endif
+
 #if 0
 
 						// Angular velocity should be in rad/sec
@@ -211,13 +258,13 @@ void CALLBACK DUOCallback(const PDUOFrame pFrameData, void *pUserData)
 					_num_samples++;
 				}
 #endif
-			}
-		}//for (int i = 0; i < pFrameData->IMUSamples; i++)
+			//}
+		//}//for (int i = 0; i < pFrameData->IMUSamples; i++)
 
 		
-		printf("------------------------------------------------------\n");
+//		printf("------------------------------------------------------\n");
 	
-}
+//}
 
 
 // -- OrientationFilterMadgwickARG --
@@ -293,18 +340,7 @@ Eigen::Quaternionf Update(float dt, const Eigen::Vector3f * gyro, const Eigen::V
 double deg2rad(double deg) {
 	return deg * M_PI / 180.0;
 }
-/*
-Eigen::Vector3f removeGravity(Eigen::Vector3f accel, Eigen::Quaternionf q)
-{
-	float g[3] = { 0.0f, 0.0f, 0.0f };
 
-	g[0] = 2 * (q.y() * q.w() - q.x() * q.z());
-	g[1] = 2 * (q.x() * q.y() + q.z() * q.w());
-	g[2] = q.x() * q.x() - q.y() * q.y() - q.z() * q.z() + q.w() * q.w();
-	accel = Eigen::Vector3f(accel[0] - g[0], accel[1] - g[1], accel[2] - g[2]);
-	return accel;
-}
-*/
 void parameterAdjustment()
 {
 	while (1)
