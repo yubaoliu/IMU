@@ -7,6 +7,17 @@ install_manifest.txt
 CTestTestfile.cmake
 build
 
+bin
+x64
+*.db
+ipch
+*.tlog
+**/*.obj
+*.vcxproj
+*.filters
+*.idb
+*.lastbuildstate
+
 **/*.log
 **/*.meta
 
@@ -102,3 +113,9 @@ flycheck_*.el
 .dir-locals.el
 
 # End of https://www.gitignore.io/api/emacs
+
+
+
+
+
+

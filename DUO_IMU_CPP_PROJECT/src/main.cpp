@@ -62,8 +62,6 @@ struct IMU_STRUCT {
 //	float linear_acceleration_covariance;
 }imu_msg;
 
-cv::Mat leftData;
-
 int main(int argc, char* argv[])
 {	
 	/*Log file init*/

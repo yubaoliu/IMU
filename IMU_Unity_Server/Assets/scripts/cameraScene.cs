@@ -10,7 +10,7 @@ public class cameraScene : MonoBehaviour {
 	void Start () {
     refresh = new Thread(new ThreadStart(refreshAssetData));
     refresh.IsBackground = true;
-    refresh.Start();
+  //  refresh.Start();
   }
 	
 	// Update is called once per frame

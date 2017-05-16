@@ -52,3 +52,5 @@ Accelerometter + Gyro => MAdgwick => AHRS
 
 * Reference
 - [[http://wiki.ros.org/duo3d-driver][duo3d-driver]]
+- [[http://www.geekmomprojects.com/mpu-6050-redux-dmp-data-fusion-vs-complementary-filter/][complementaty-filter
+]]
