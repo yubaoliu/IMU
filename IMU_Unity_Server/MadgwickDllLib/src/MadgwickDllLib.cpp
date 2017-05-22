@@ -7,7 +7,7 @@
 #include "MathEigen.h"
 #include "MathUtility.h"
 
-Eigen::Quaternionf currentRotation;
+
 
 
 //Eigen::Quaternionf currentRotation = Eigen::Quaternionf::Identity();
@@ -17,8 +17,10 @@ Eigen::Quaternionf currentRotation;
 // "An efficient orientation filter for inertial and inertial/magnetic sensor arrays"
 // https://www.samba.org/tridge/UAV/madgwick_internal_report.pdf
 extern "C" UNITY_INTERFACE_EXPORT Eigen::Quaternionf  UNITY_INTERFACE_API
- MadgwickFilter(float dt, const Eigen::Vector3f * gyro, const Eigen::Vector3f * acc, const Eigen::Vector3f * mag, const Eigen::Vector3f &gyro_variance,  const Eigen::Quaternionf &currentRotation)
+ MadgwickFilter(float dt, const Eigen::Vector3f * gyro, const Eigen::Vector3f * acc, const Eigen::Vector3f * mag, const Eigen::Vector3f* gyro_variance,  float qx, float qy, float qz, float qw)
 {
+	Eigen::Quaternionf currentRotation(qw, qx, qy, qz);
+
 	const Eigen::Vector3f &current_omega = Eigen::Vector3f(gyro->x(), gyro->y(), gyro->z());
 
 	Eigen::Vector3f current_g = Eigen::Vector3f(acc->x(), acc->y(), acc->z());
@@ -63,7 +65,7 @@ extern "C" UNITY_INTERFACE_EXPORT Eigen::Quaternionf  UNITY_INTERFACE_API
 		//float guess = 0.03; //rad/s -- TODO: this has to be  measured in a calibration routine
 		//Eigen::Vector3f gyro_variance = Eigen::Vector3f(guess, guess, guess);
 
-		const float beta = sqrtf(3.0f / 4.0f) * fmaxf(fmaxf(gyro_variance.x(), gyro_variance.y()), gyro_variance.z());
+		const float beta = sqrtf(3.0f / 4.0f) * fmaxf(fmaxf((*gyro_variance).x(), (*gyro_variance).y()), (*gyro_variance).z());
 		Eigen::Quaternionf SEqDot_est = Eigen::Quaternionf(SEqDot_omega.coeffs() - SEqHatDot.coeffs()*beta);
 
 		// Compute then integrate the estimated quaternion rate
@@ -79,18 +81,11 @@ extern "C" UNITY_INTERFACE_EXPORT Eigen::Quaternionf  UNITY_INTERFACE_API
 	SEq_new.normalize();
 
 	// Saves the new orientation value
-//	currentRotation = SEq_new;
+	currentRotation = SEq_new;
 
-	return SEq_new; //currentRotation
-}
-/*
-extern "C" UNITY_INTERFACE_EXPORT Eigen::Quaternionf  UNITY_INTERFACE_API
-MadgwickUpdate(float dt, const Eigen::Vector3f  gyro, const Eigen::Vector3f  acc, const Eigen::Vector3f  mag, Eigen::Vector3f gyro_variance, Eigen::Quaternionf currentRotation)
-{
-	currentRotation = MadgwickFilter(dt, &gyro, &acc, &mag, gyro_variance,currentRotation);
 	return currentRotation;
 }
-*/
+
 extern "C" UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API
 IsMadgwickDllLibLoaded()
 {

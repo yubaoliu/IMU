@@ -8,10 +8,11 @@ using System.Net;
 using System.Threading;
 using DUODeviceLib;
 using Assets.scripts;
+using System.Runtime.InteropServices;
 
 public class IMU_DUO3D : MonoBehaviour
 {
-  float imuDeltaTime = 2.0f / 1000.0f;
+  //float imuDeltaTime = 2.0f / 1000.0f;
   public struct IMU_SENSOR
   {
     public Vector3 linear_acceleration;
@@ -24,15 +25,16 @@ public class IMU_DUO3D : MonoBehaviour
 
   IMU_SENSOR imu_msg;
 
-
-  byte[] recBuf = new byte[100];
-  byte[] sendBuf = new byte[1024];
-
   Quaternion IMUrotation=Quaternion.identity;
+  byte[] leftData;
+  byte[] rightData;
 
   IntPtr left;
+  IntPtr right;
 
-  DUODevice device = new DUODevice();
+  Texture2D liveVedioFromWebCamera;
+  uint size;
+  DUODevice device;
 
   static int frameCount = 0;
 
@@ -46,23 +48,29 @@ public class IMU_DUO3D : MonoBehaviour
     {
       Debug.LogError("MadgwickDllLib loaded failed");
     }
+    device = new DUODevice();
 
-  imu_msg._gyro_offset = new Vector3(-1.8966f, 1.9159f, 0.1865f);
-  imu_msg._gyro_varience = new Vector3(0.0351f, 0.0149f, 0.0000001f);
+    //  liveVedioFromWebCamera = new Texture2D(640, 480,TextureFormat.Alpha8,false);
+    liveVedioFromWebCamera = new Texture2D(640, 480);
+    imu_msg._gyro_offset = new Vector3(-1.8966f, 1.9159f, 0.1865f);
+    imu_msg._gyro_varience = new Vector3(0.0351f, 0.0149f, 0.0000001f);
   //initialize DUO3D camara
 
-  device.DUODeviceStatusChanged += DUODeviceStatusChanged;
+    device.DUODeviceStatusChanged += DUODeviceStatusChanged;
     device.DUOFrameReceived += DUOFrameReceived;
     device.Resolution = new DUOResolutionInfo() {
-      width=320,
-      height=240,
-      binning = DUOBinning.DUO_BIN_HORIZONTAL2 | DUOBinning.DUO_BIN_VERTICAL2,
-      fps=30
+      width = 640,
+      height = 480,
+      //binning = DUOBinning.DUO_BIN_HORIZONTAL2 | DUOBinning.DUO_BIN_VERTICAL2,
+      binning = DUOBinning.DUO_BIN_NONE,
+      fps =30
     };
-    device.Start();
-    device.Exposure = 100;
+    
+    device.Exposure = 80;
     device.Gain = 10;
+    device.LED = 50;
 
+    device.Start();
     imu_msg.magn = Vector3.zero;
 
     Debug.Log("inited");
@@ -80,11 +88,24 @@ public class IMU_DUO3D : MonoBehaviour
       baseline = Quaternion.Inverse(IMUrotation);
     }
 
-    IMUrotation = DllWrapper.MadgwickFilter(imuDeltaTime, ref imu_msg.angular_velocity, ref imu_msg.linear_acceleration, ref imu_msg.magn, imu_msg._gyro_varience, IMUrotation);
-   // Transform scene = transform.FindChild("cameraScene");
+    IMUrotation = DllWrapper.MadgwickFilter(Time.deltaTime, ref imu_msg.angular_velocity, ref imu_msg.linear_acceleration, ref imu_msg.magn, ref imu_msg._gyro_varience, IMUrotation.x, IMUrotation.y, IMUrotation.z, IMUrotation.w);
+   
 
     transform.localRotation = baseline * IMUrotation;
-    print(IMUrotation.eulerAngles.x.ToString() + "," + IMUrotation.eulerAngles.y.ToString() + "," + IMUrotation.eulerAngles.z.ToString());
+    // print(IMUrotation.eulerAngles.x.ToString() + "," + IMUrotation.eulerAngles.y.ToString() + "," + IMUrotation.eulerAngles.z.ToString());
+
+    if(0!=left.ToInt32())
+    {
+      //  liveVedioFromWebCamera.LoadRawTextureData(leftData);
+      // liveVedioFromWebCamera.LoadImage(leftData);
+      Debug.Log("width: "+liveVedioFromWebCamera.width);
+      Debug.Log("height: " + liveVedioFromWebCamera.height);
+      liveVedioFromWebCamera.LoadRawTextureData(left, (int)size);
+      liveVedioFromWebCamera.Apply();
+      transform.FindChild("cameraScene").GetComponent<Renderer>().material.mainTexture = liveVedioFromWebCamera;
+ //     leftData.Initialize();
+    }
+
 
   }
 
@@ -92,8 +113,6 @@ public class IMU_DUO3D : MonoBehaviour
   {
     print("OnDestroy is called");
 
-
-    //client.Close ();
     device.Stop();
     device.Dispose();
   }
@@ -101,19 +120,36 @@ public class IMU_DUO3D : MonoBehaviour
   void DUOFrameReceived(DUODevice sender, ref DUOFrame pFrameData)
   {
     frameCount++;
-    Debug.Log("Frame Count: " + frameCount.ToString() + "  timeStamp:  " + pFrameData.timeStamp.ToString());
+   // Debug.Log("Frame Count: " + frameCount.ToString() + "  timeStamp:  " + pFrameData.timeStamp.ToString());
     if (pFrameData.IMUPresent)
     {
       left = pFrameData.leftData;
-
+      right = pFrameData.rightData;
+      size = pFrameData.width * pFrameData.height;
+      Debug.Log("size: "+ size);
+     
+      
+           if (0!=left.ToInt32())
+            { 
+              leftData = new byte[size];
+              Marshal.Copy(left, leftData, 0, (int)size);
+            }
+           if(0!=right.ToInt32())
+            {
+              rightData = new byte[size];
+              Marshal.Copy(right, rightData, 0, (int)size);
+            }
+        
+      // byte* ptr = (byte*)(void*)left;
       for (int i = 0; i < pFrameData.IMUSamples; i++)
       {
+        /*
         Debug.Log("Sample:  " + (i + 1).ToString());
         Debug.Log("Timestamp: " + pFrameData.IMUData[i].timeStamp.ToString());
         Debug.Log("Acceleration:  " + pFrameData.IMUData[i].accelData[0].ToString() + pFrameData.IMUData[i].accelData[1].ToString() + pFrameData.IMUData[i].accelData[2].ToString());
         Debug.Log("Gyro:  " + pFrameData.IMUData[i].gyroData[0].ToString() + pFrameData.IMUData[i].gyroData[1].ToString() + pFrameData.IMUData[i].gyroData[2].ToString());
         Debug.Log("Temperature: " + pFrameData.IMUData[i].tempData.ToString());
-
+        */
         imu_msg.linear_acceleration[0] = pFrameData.IMUData[i].accelData[0] * 9.80151f;
         imu_msg.linear_acceleration[1] = pFrameData.IMUData[i].accelData[1] * 9.80151f;
         imu_msg.linear_acceleration[2] = pFrameData.IMUData[i].accelData[2] * 9.80151f;

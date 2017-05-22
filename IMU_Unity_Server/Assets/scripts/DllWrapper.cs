@@ -13,6 +13,6 @@ namespace Assets.scripts
     public static extern bool IsMadgwickDllLibLoaded();
 
     [DllImport("MadgwickDllLib")]
-    public static extern Quaternion MadgwickFilter(float dt, ref Vector3 gyro, ref Vector3 acc,ref Vector3 mag, Vector3 gyro_variance, Quaternion currentRotation);
+    public static extern Quaternion MadgwickFilter(float dt, ref Vector3 gyro, ref Vector3 acc,ref Vector3 mag, ref Vector3 gyro_variance, float qx, float qy, float qz, float qw);
   }
 }
