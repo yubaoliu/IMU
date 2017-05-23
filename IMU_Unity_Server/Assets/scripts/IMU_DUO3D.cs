@@ -12,7 +12,6 @@ using System.Runtime.InteropServices;
 
 public class IMU_DUO3D : MonoBehaviour
 {
-  //float imuDeltaTime = 2.0f / 1000.0f;
   public struct IMU_SENSOR
   {
     public Vector3 linear_acceleration;
@@ -23,11 +22,9 @@ public class IMU_DUO3D : MonoBehaviour
     public Vector3 _gyro_varience;
   }
 
-  public IMU_SENSOR imu_msg;
+  IMU_SENSOR imu_msg;
 
   Quaternion IMUrotation = Quaternion.identity;
-  //byte[] leftData;
-  //byte[] rightData;
 
   IntPtr left;
   IntPtr right;
@@ -52,10 +49,9 @@ public class IMU_DUO3D : MonoBehaviour
     device = new DUODevice();
 
     liveVedioFromWebCamera = new Texture2D(640, 480, TextureFormat.Alpha8, false);
-    //liveVedioFromWebCamera = new Texture2D(640, 480);
+
     imu_msg._gyro_offset = new Vector3(-1.8966f, 1.9159f, 0.1865f);
     imu_msg._gyro_varience = new Vector3(0.0351f, 0.0149f, 0.0000001f);
-    //initialize DUO3D camara
 
     device.DUODeviceStatusChanged += DUODeviceStatusChanged;
     device.DUOFrameReceived += DUOFrameReceived;
@@ -99,10 +95,8 @@ public class IMU_DUO3D : MonoBehaviour
 
     if (left != IntPtr.Zero)
     {
-      //  liveVedioFromWebCamera.LoadRawTextureData(leftData);
-      // liveVedioFromWebCamera.LoadImage(leftData);
-      Debug.Log("width: " + liveVedioFromWebCamera.width);
-      Debug.Log("height: " + liveVedioFromWebCamera.height);
+    //  Debug.Log("width: " + liveVedioFromWebCamera.width);
+    //  Debug.Log("height: " + liveVedioFromWebCamera.height);
 
       liveVedioFromWebCamera.LoadRawTextureData(left, (int)size);
 
@@ -129,20 +123,6 @@ public class IMU_DUO3D : MonoBehaviour
       left = pFrameData.leftData;
       right = pFrameData.rightData;
       size = pFrameData.width * pFrameData.height;
-      Debug.Log("size: " + size);
-
-      /*
-           if (0!=left.ToInt32())
-            { 
-              leftData = new byte[size];
-              Marshal.Copy(left, leftData, 0, (int)size);
-            }
-           if(0!=right.ToInt32())
-            {
-              rightData = new byte[size];
-              Marshal.Copy(right, rightData, 0, (int)size);
-            }
-        */
 
       for (int i = 0; i < pFrameData.IMUSamples; i++)
       {
