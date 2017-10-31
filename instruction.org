@@ -1,18 +1,5 @@
-* Synopsis
-**  IMU Project File Description
-*** "IMU_Unity_Server" Project
-- IMU_DUO3D.cs
-  DUO3D IMU Unity server script, used to receive the orientation data from DUO3D client
-- IMU_JY901BT.cs
-  JY901BT IMU Unity server script, used to receive the orientation data from JY901BT client
-*** "IMUJY901_python_client" Project
-It's the JY901BT IMU client, used to send Gyo data to IMU Unity server
-
-* IMU Related
-** Technical parameters  
-- 
-
-**  Gyo Calibration
+* IMU Calibration
+** Gyo Calibration
 *** Bias Error
 Bias error is nonzero output signal which appears in the sensor output when input is zero. The bias offset causes the sensor output to offset from the true data by a constant value. This error is not dependent on external forces applied to the sensor. Bias error can be divided into three categories, including a static part (or bias offset), a random part (or drift), and a temperature dependent part. The static bias and temperature bias can be compensated in the calibration process. Static bias can be measured by averaging the sensor output for a zero input signal. To compensate for this bias, it should be subtracted from the output data. The drift bias has a random nature and cannot be fixed in the calibration process. It should be treated as a stochastic error. 
 
@@ -50,7 +37,188 @@ Accelerometter + Gyro => MAdgwick => AHRS
 [[./img/Gyo_ori_kalman_bias_compare.jpg
 ]]
 
+** Accelerometter Calibration
+** Magenatic Calibration
+* Data Filter and Fusion
+
+* Coordinate Convertion
+ How to Coververt IMU coordinate from right hand to left hand system (e.g. Unity)?
+
+** [[https://www.evl.uic.edu/ralph/508S98/coordinates.html][Left- vs. Right-handed coordinate systems]]
+
+1. Left-handed coordinate system
+
+The default coordinate system in the RenderMan(TM) Interface is left-handed: the positive x, y and z axes point right, up and forward, respectively. Positive rotation is *clockwise* about the axis of rotation.
+ 
+2. Right-handed coordinate system
+
+The default coordinate system in OpenGL(TM) is right-handed: the positive x and y axes point right and up, and the negative z axis points forward. Positive rotation is *counterclockwise* about the axis of rotation.
+
+3. IMU coordinate
+
++ LIS2MDL: Left hand  
++ LSM6DSL/M: right hand
+* Set the Zero-reference orientation
+The calibration method is used ot set the zero-reference orientation for the head-tracking sensor.
+
+This is a typical demo for IMU HMD tracking which is from a book titled "Interaction Design for 3D User Interfaces":
+#+BEGIN_SRC csharp :tangle head_tracking_template.cs
+  public class HMD: Monobehaviour
+  {
+
+      [DllImport("ThreeSpaceAPIDLL.dll"), CallingConvertion=CallingConvertion.Cdecl, EntryPoint="tss_sensor_getUntaredOrientation"]
+      private static extern uint sensor_getUntaredOrientationAsQuaternion(unit sensor_id, float[] orient);
+      //.....other dll APIs: createSensor, removeSensor
+
+      UNIT sensor_id;
+      Quaternion tare,offset;
+      GameObject camera;
+
+      Quaternion getUntaredOrientationAsOuaternion()
+      {
+          float[] orient=new flaot[4];
+          sensor_getUntaredOrientationAsQuaternion(sensor_id,orient);
+          Quaternion q_orient=new Quaternion(orient[0],orient[1],orient[2],orient[3]);
+          return q_orient;
+      }
+
+      void Calibrate()
+      {
+          Quaternion q_orient=getUntaredOrientationAsOuaternion();
+          offset=Quaternion.identity;
+          //If HMD is tilted downward at 45 degree angle
+          //offset=Quaternion.AngleAxis(-45,Vector3.right);
+
+          //have to take the offset into consideration to find the tare
+          tare=Quaternion.Inverse(q_orient*offset);
+      }
+
+      void Start()
+      {
+          string port="COM10";
+          createSensor(port, ref sensor_id);
+
+          //grab the camera object
+          camera=GameObject.Find("Main Camera");
+      }
+
+      void Update()
+      {
+          //calibrate so as to make the HMD/sensor in place
+          if(Input.GetKeyDown(KeyCode.C))
+          {
+              Calibrate();
+          }
+
+          Quaternion q_orient=getUntaredOrientationAsOuaternion();
+          q_orient=tare*q_orient*offset;
+          camera.transform.rotation=q_orient;
+      }
+
+      void OnApplicationQuit()
+      {
+          Debug.Log("Releasing Sensor");
+          removeSensor(sensor_id);
+      }
+    
+  }
+
+#+END_SRC
+* 
+* Sample Code
+
+This demo is tested for for ST LSM6DSM and LSM6DSL.
+#+BEGIN_SRC csharp :tangle IMUTracker.cs
+
+public class IMUTracker : MonoBehaviour {
+    //Parameters of GetIMUDataFusionData API
+    Int32 timeStamp = 0;
+    Vector4 quaternion_9X;
+    Vector3 rotation_9X;
+    Vector3 gravity_9X;
+    Vector3 linear_Accl_9X;
+    float heading_9X;
+
+    GameObject dumy;
+
+   void Start () {
+        dumy = new GameObject();
+        }
+
+    void Update () {
+
+        if(DllWrapper.GetIMUDataFusionData(out timeStamp, out quaternion_9X, out rotation_9X, out gravity_9X, out linear_Accl_9X, out heading_9X)) //This fuction is used to obtain the IMU pose data after data fuion (Here called ST MotionFX API in dll lib), this API called a callback function to collect IMU data in 100HZ
+        {
+        // Unity Demo to Convert coververt coordinate system
+            dumy.transform.localRotation = Quaternion.Euler(Vector3.zero);
+            dumy.transform.Rotate(Vector3.up, rotation_9X.x); //yaw
+            dumy.transform.Rotate(Vector3.forward, rotation_9X.z); //roll
+            dumy.transform.Rotate(Vector3.right, rotation_9X.y); //pitch
+
+            transform.localRotation = dumy.transform.localRotation;
+        }
+        
+        }
+}
+
+#+END_SRC
+
+#+BEGIN_SRC csharp :tangle Dllwrapper.cs
+        [DllImport("CppLib")] //need enable IMU Data Fusion Data Mode
+        public static extern bool GetIMUDataFusionData(out Int32 timeStamp, out Vector4 Quaternion_9X, out Vector3 Rotation_9X, out Vector3 Gravity_9X, out Vector3 Linear_Accl_9X, out float Heading_9X);
+
+#+END_SRC
+
+#+BEGIN_SRC C++ :tangle InterfaceToUnity.cpp
+extern "C" UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API
+GetIMUDataFusionData(UINT32& timeStamp, float Quaternion_9X[4], float Rotation_9X[3], float Gravity_9X[3], float Linear_Accl_9X[3], float& Heading_9X)
+{
+	if (status.STATUS_IMU == 0)
+	{
+		timeStamp = imuDataFusionData.timeStamp;
+		Heading_9X = imuDataFusionData.Heading_9X;
+		memcpy_s(Quaternion_9X, 4 * sizeof(float), imuDataFusionData.Quaternion_9X, 4 * sizeof(float));
+		memcpy_s(Rotation_9X, 3 * sizeof(float), imuDataFusionData.Rotation_9X, 3 * sizeof(float));
+		memcpy_s(Gravity_9X, 3 * sizeof(float), imuDataFusionData.Gravity_9X, 3 * sizeof(float));
+		memcpy_s(Linear_Accl_9X, 3 * sizeof(float), imuDataFusionData.Linear_Accl_9X, 3 * sizeof(float));
+		return (imuRawData.timeStamp - timeStamp > 0.00000000001f) ? true : false;
+	}
+	else
+	{
+		DebugInUnityConsole("GetIMUDataFusionData failed, status.STATUS_IMU!=0");
+		return false;
+	}
+	
+}
+#+END_SRC
+
+
 * Reference
 - [[http://wiki.ros.org/duo3d-driver][duo3d-driver]]
 - [[http://www.geekmomprojects.com/mpu-6050-redux-dmp-data-fusion-vs-complementary-filter/][complementaty-filter
+- <<Interaction Design for 3D User Interfaces>>
+
+@article{doi:10.1162/105474601750182342,
+author = { Doug A. Bowman  and  Ernst Kruijff  and  Joseph J. LaViola, Jr. and  Ivan Poupyrev},
+title = {An Introduction to 3-D User Interface Design},
+journal = {Presence: Teleoperators and Virtual Environments},
+volume = {10},
+number = {1},
+pages = {96-108},
+year = {2001},
+doi = {10.1162/105474601750182342},
+
+URL = { 
+        https://doi.org/10.1162/105474601750182342
+    
+},
+eprint = { 
+        https://doi.org/10.1162/105474601750182342
+    
+}
+,
+    abstract = { Three-dimensional user interface design is a critical component of any virtual environment (VE) application. In this paper, we present a broad overview of 3-D interaction and user interfaces. We discuss the effect of common VE hardware devices on user interaction, as well as interaction techniques for generic 3-D tasks and the use of traditional 2-D interaction styles in 3-D environments. We divide most user-interaction tasks into three categories: navigation, selection/manipulation, and system control. Throughout the paper, our focus is on presenting not only the available techniques but also practical guidelines for 3-D interaction design and widely held myths. Finally, we briefly discuss two approaches to 3-D interaction design and some example applications with complex 3-D interaction requirements. We also present an annotated online bibliography as a reference companion to this article. }
+}
 ]]
+
+
