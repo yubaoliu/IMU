@@ -1,0 +1,234 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; background-color: #f8f8f8; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+pre, code { background-color: #f8f8f8; }
+code > span.kw { color: #204a87; font-weight: bold; } /* Keyword */
+code > span.dt { color: #204a87; } /* DataType */
+code > span.dv { color: #0000cf; } /* DecVal */
+code > span.bn { color: #0000cf; } /* BaseN */
+code > span.fl { color: #0000cf; } /* Float */
+code > span.ch { color: #4e9a06; } /* Char */
+code > span.st { color: #4e9a06; } /* String */
+code > span.co { color: #8f5902; font-style: italic; } /* Comment */
+code > span.ot { color: #8f5902; } /* Other */
+code > span.al { color: #ef2929; } /* Alert */
+code > span.fu { color: #000000; } /* Function */
+code > span.er { color: #a40000; font-weight: bold; } /* Error */
+code > span.wa { color: #8f5902; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #000000; } /* Constant */
+code > span.sc { color: #000000; } /* SpecialChar */
+code > span.vs { color: #4e9a06; } /* VerbatimString */
+code > span.ss { color: #4e9a06; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #000000; } /* Variable */
+code > span.cf { color: #204a87; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #ce5c00; font-weight: bold; } /* Operator */
+code > span.pp { color: #8f5902; font-style: italic; } /* Preprocessor */
+code > span.ex { } /* Extension */
+code > span.at { color: #c4a000; } /* Attribute */
+code > span.do { color: #8f5902; font-weight: bold; font-style: italic; } /* Documentation */
+code > span.an { color: #8f5902; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #8f5902; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #8f5902; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<h1 id="imu-calibration">IMU Calibration</h1>
+<h2 id="gyo-calibration">Gyo Calibration</h2>
+<h3 id="bias-error">Bias Error</h3>
+<p>Bias error is nonzero output signal which appears in the sensor output when input is zero. The bias offset causes the sensor output to offset from the true data by a constant value. This error is not dependent on external forces applied to the sensor. Bias error can be divided into three categories, including a static part (or bias offset), a random part (or drift), and a temperature dependent part. The static bias and temperature bias can be compensated in the calibration process. Static bias can be measured by averaging the sensor output for a zero input signal. To compensate for this bias, it should be subtracted from the output data. The drift bias has a random nature and cannot be fixed in the calibration process. It should be treated as a stochastic error.</p>
+<h3 id="calculate-the-bias-offset">Calculate the Bias Offset</h3>
+<p>Keep the DUO3D IMU in static stastus, and then track the Gyo data output to calculate the bias error.</p>
+<ul>
+<li>pictures: ./IMU<sub>RESOURCES</sub>/pictures/GyoRawData.jpg</li>
+<li>data: ./data/originalIMU.txt</li>
+<li>Matlab scripts</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode matlab"><code class="sourceCode matlab"><span class="co">%The IMU data </span>
+originalFp=fopen(<span class="st">&#39;originalIMU.txt&#39;</span>);
+<span class="co">%[Gyo,count]=fscanf(fd,&#39;Gyro: %f , %f , %f&#39;)</span>
+Gyo=fscanf(originalFp,<span class="st">&#39;%f,%f,%f&#39;</span>,[<span class="fl">3</span> Inf]);
+Gyo=Gyo&#39;;
+fclose(originalFp);
+
+<span class="co">%plot</span>
+plot(Gyo)
+<span class="co">%xlable(&#39;No. of samples&#39;),ylable(&#39;Output&#39;)</span>
+title(<span class="st">&#39;Original Gyo data&#39;</span>)
+<span class="co">%axis([0,3000,-10,10]);</span></code></pre></div>
+<p>Avarage Value: [ -1.7996 1.6850 0.1413]</p>
+<p>This is the bias error of Gyroscope and this value need to be subtracted.</p>
+<h3 id="data-fusion-and-filter">Data fusion and filter</h3>
+<p>Accelerometter + Gyro =&gt; MAdgwick =&gt; AHRS</p>
+<h3 id="results">Results</h3>
+<p>[[./img/Gyo<sub>orikalmanbiascompare</sub>.jpg ]]</p>
+<h2 id="accelerometter-calibration">Accelerometter Calibration</h2>
+<h2 id="magenatic-calibration">Magenatic Calibration</h2>
+<h1 id="data-filter-and-fusion">Data Filter and Fusion</h1>
+<h1 id="coordinate-convertion">Coordinate Convertion</h1>
+<p>How to Coververt IMU coordinate from right hand to left hand system (e.g. Unity)?</p>
+<h2 id="left--vs.-right-handed-coordinate-systems"><a href="https://www.evl.uic.edu/ralph/508S98/coordinates.html">Left- vs. Right-handed coordinate systems</a></h2>
+<ol>
+<li>Left-handed coordinate system</li>
+</ol>
+<p>The default coordinate system in the RenderMan(TM) Interface is left-handed: the positive x, y and z axes point right, up and forward, respectively. Positive rotation is <strong>clockwise</strong> about the axis of rotation.</p>
+<ol>
+<li>Right-handed coordinate system</li>
+</ol>
+<p>The default coordinate system in OpenGL(TM) is right-handed: the positive x and y axes point right and up, and the negative z axis points forward. Positive rotation is <strong>counterclockwise</strong> about the axis of rotation.</p>
+<ol>
+<li>IMU coordinate</li>
+</ol>
+<ul>
+<li>LIS2MDL: Left hand</li>
+<li>LSM6DSL/M: right hand</li>
+</ul>
+<h1 id="set-the-zero-reference-orientation">Set the Zero-reference orientation</h1>
+<p>The calibration method is used ot set the zero-reference orientation for the head-tracking sensor.</p>
+<p>This is a typical demo for IMU HMD tracking which is from a book titled &quot;Interaction Design for 3D User Interfaces&quot;:</p>
+<pre class="csharp rundoc-block" rundoc-language="csharp" rundoc-tangle="head_tracking_template.cs"><code>public class HMD: Monobehaviour
+{
+
+    [DllImport(&quot;ThreeSpaceAPIDLL.dll&quot;), CallingConvertion=CallingConvertion.Cdecl, EntryPoint=&quot;tss_sensor_getUntaredOrientation&quot;]
+    private static extern uint sensor_getUntaredOrientationAsQuaternion(unit sensor_id, float[] orient);
+    //.....other dll APIs: createSensor, removeSensor
+
+    UNIT sensor_id;
+    Quaternion tare,offset;
+    GameObject camera;
+
+    Quaternion getUntaredOrientationAsOuaternion()
+    {
+        float[] orient=new flaot[4];
+        sensor_getUntaredOrientationAsQuaternion(sensor_id,orient);
+        Quaternion q_orient=new Quaternion(orient[0],orient[1],orient[2],orient[3]);
+        return q_orient;
+    }
+
+    void Calibrate()
+    {
+        Quaternion q_orient=getUntaredOrientationAsOuaternion();
+        offset=Quaternion.identity;
+        //If HMD is tilted downward at 45 degree angle
+        //offset=Quaternion.AngleAxis(-45,Vector3.right);
+
+        //have to take the offset into consideration to find the tare
+        tare=Quaternion.Inverse(q_orient*offset);
+    }
+
+    void Start()
+    {
+        string port=&quot;COM10&quot;;
+        createSensor(port, ref sensor_id);
+
+        //grab the camera object
+        camera=GameObject.Find(&quot;Main Camera&quot;);
+    }
+
+    void Update()
+    {
+        //calibrate so as to make the HMD/sensor in place
+        if(Input.GetKeyDown(KeyCode.C))
+        {
+            Calibrate();
+        }
+
+        Quaternion q_orient=getUntaredOrientationAsOuaternion();
+        q_orient=tare*q_orient*offset;
+        camera.transform.rotation=q_orient;
+    }
+
+    void OnApplicationQuit()
+    {
+        Debug.Log(&quot;Releasing Sensor&quot;);
+        removeSensor(sensor_id);
+    }
+
+}
+
+</code></pre>
+<h1 id="section"></h1>
+<h1 id="sample-code">Sample Code</h1>
+<p>This demo is tested for for ST LSM6DSM and LSM6DSL.</p>
+<pre class="csharp rundoc-block" rundoc-language="csharp" rundoc-tangle="IMUTracker.cs"><code>
+public class IMUTracker : MonoBehaviour {
+    //Parameters of GetIMUDataFusionData API
+    Int32 timeStamp = 0;
+    Vector4 quaternion_9X;
+    Vector3 rotation_9X;
+    Vector3 gravity_9X;
+    Vector3 linear_Accl_9X;
+    float heading_9X;
+
+    GameObject dumy;
+
+   void Start () {
+        dumy = new GameObject();
+        }
+
+    void Update () {
+
+        if(DllWrapper.GetIMUDataFusionData(out timeStamp, out quaternion_9X, out rotation_9X, out gravity_9X, out linear_Accl_9X, out heading_9X)) //This fuction is used to obtain the IMU pose data after data fuion (Here called ST MotionFX API in dll lib), this API called a callback function to collect IMU data in 100HZ
+        {
+        // Unity Demo to Convert coververt coordinate system
+            dumy.transform.localRotation = Quaternion.Euler(Vector3.zero);
+            dumy.transform.Rotate(Vector3.up, rotation_9X.x); //yaw
+            dumy.transform.Rotate(Vector3.forward, rotation_9X.z); //roll
+            dumy.transform.Rotate(Vector3.right, rotation_9X.y); //pitch
+
+            transform.localRotation = dumy.transform.localRotation;
+        }
+
+        }
+}
+
+</code></pre>
+<pre class="csharp rundoc-block" rundoc-language="csharp" rundoc-tangle="Dllwrapper.cs"><code>[DllImport(&quot;CppLib&quot;)] //need enable IMU Data Fusion Data Mode
+public static extern bool GetIMUDataFusionData(out Int32 timeStamp, out Vector4 Quaternion_9X, out Vector3 Rotation_9X, out Vector3 Gravity_9X, out Vector3 Linear_Accl_9X, out float Heading_9X);
+
+</code></pre>
+<pre><code>extern &quot;C&quot; UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API
+GetIMUDataFusionData(UINT32&amp; timeStamp, float Quaternion_9X[4], float Rotation_9X[3], float Gravity_9X[3], float Linear_Accl_9X[3], float&amp; Heading_9X)
+{
+    if (status.STATUS_IMU == 0)
+    {
+        timeStamp = imuDataFusionData.timeStamp;
+        Heading_9X = imuDataFusionData.Heading_9X;
+        memcpy_s(Quaternion_9X, 4 * sizeof(float), imuDataFusionData.Quaternion_9X, 4 * sizeof(float));
+        memcpy_s(Rotation_9X, 3 * sizeof(float), imuDataFusionData.Rotation_9X, 3 * sizeof(float));
+        memcpy_s(Gravity_9X, 3 * sizeof(float), imuDataFusionData.Gravity_9X, 3 * sizeof(float));
+        memcpy_s(Linear_Accl_9X, 3 * sizeof(float), imuDataFusionData.Linear_Accl_9X, 3 * sizeof(float));
+        return (imuRawData.timeStamp - timeStamp &gt; 0.00000000001f) ? true : false;
+    }
+    else
+    {
+        DebugInUnityConsole(&quot;GetIMUDataFusionData failed, status.STATUS_IMU!=0&quot;);
+        return false;
+    }
+
+}
+</code></pre>
+<h1 id="reference">Reference</h1>
+<ul>
+<li><a href="http://wiki.ros.org/duo3d-driver">duo3d-driver</a></li>
+<li>[[<a href="http://www.geekmomprojects.com/mpu-6050-redux-dmp-data-fusion-vs-complementary-filter/" class="uri">http://www.geekmomprojects.com/mpu-6050-redux-dmp-data-fusion-vs-complementary-filter/</a>][complementaty-filter</li>
+<li>&lt;&lt;Interaction Design for 3D User Interfaces&gt;&gt;</li>
+</ul>
+<p><span class="citation">@article</span>{<a href="doi:10.1162/105474601750182342" class="uri">doi:10.1162/105474601750182342</a>, author = { Doug A. Bowman and Ernst Kruijff and Joseph J. LaViola, Jr. and Ivan Poupyrev}, title = {An Introduction to 3-D User Interface Design}, journal = {Presence: Teleoperators and Virtual Environments}, volume = {10}, number = {1}, pages = {96-108}, year = {2001}, doi = {10.1162/105474601750182342},</p>
+<p>URL = { <a href="https://doi.org/10.1162/105474601750182342" class="uri">https://doi.org/10.1162/105474601750182342</a></p>
+<p>}, eprint = { <a href="https://doi.org/10.1162/105474601750182342" class="uri">https://doi.org/10.1162/105474601750182342</a></p>
+<p>} , abstract = { Three-dimensional user interface design is a critical component of any virtual environment (VE) application. In this paper, we present a broad overview of 3-D interaction and user interfaces. We discuss the effect of common VE hardware devices on user interaction, as well as interaction techniques for generic 3-D tasks and the use of traditional 2-D interaction styles in 3-D environments. We divide most user-interaction tasks into three categories: navigation, selection/manipulation, and system control. Throughout the paper, our focus is on presenting not only the available techniques but also practical guidelines for 3-D interaction design and widely held myths. Finally, we briefly discuss two approaches to 3-D interaction design and some example applications with complex 3-D interaction requirements. We also present an annotated online bibliography as a reference companion to this article. } } ]]</p>
+</body>
+</html>
