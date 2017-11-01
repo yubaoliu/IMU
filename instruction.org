@@ -60,6 +60,8 @@ The default coordinate system in OpenGL(TM) is right-handed: the positive x and 
 + LSM6DSL/M: right hand
 * Set the Zero-reference orientation
 The calibration method is used ot set the zero-reference orientation for the head-tracking sensor.
+ 
+* Sample Code
 
 This is a typical demo for IMU HMD tracking which is from a book titled "Interaction Design for 3D User Interfaces":
 #+BEGIN_SRC csharp :tangle head_tracking_template.cs
@@ -71,7 +73,10 @@ This is a typical demo for IMU HMD tracking which is from a book titled "Interac
       //.....other dll APIs: createSensor, removeSensor
 
       UNIT sensor_id;
-      Quaternion tare,offset;
+      Quaternion offset = Quaternion.identity; 
+      Quaternion tare = Quaternion.identity;
+      //This quaternion corresponds to "no rotation" - the object is perfectly aligned with the world or parent axes.
+
       GameObject camera;
 
       Quaternion getUntaredOrientationAsOuaternion()
@@ -105,7 +110,7 @@ This is a typical demo for IMU HMD tracking which is from a book titled "Interac
       void Update()
       {
           //calibrate so as to make the HMD/sensor in place
-          if(Input.GetKeyDown(KeyCode.C))
+          if(Input.GetKeyDown(KeyCode.Space))
           {
               Calibrate();
           }
@@ -124,8 +129,7 @@ This is a typical demo for IMU HMD tracking which is from a book titled "Interac
   }
 
 #+END_SRC
-* 
-* Sample Code
+
 
 This demo is tested for for ST LSM6DSM and LSM6DSL.
 #+BEGIN_SRC csharp :tangle IMUTracker.cs
